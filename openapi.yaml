@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Food Order API
-  version: 0.1.0
-  description: Self-hosted demo orders and experimental read-only TGO Meal Stage.
+  version: 0.2.0
+  description: Self-hosted unified food order API with real adapters for Trendyol Go, Uber Eats, Yemeksepeti, GetirYemek and Migros Yemek.
 servers:
   - url: http://127.0.0.1:3000
 security:
@@ -20,7 +20,7 @@ paths:
       operationId: listProviders
       responses:
         '200':
-          description: Enabled providers and supported operations.
+          description: Enabled providers, environments and supported capabilities.
         '401':
           description: Missing or invalid token.
   /v1/demo/orders:
@@ -80,20 +80,45 @@ paths:
         '429': { description: Provider request limit reached. }
         '502': { description: Upstream failure. }
         '503': { description: Provider disabled. }
-  /v1/orders/demo/{id}/actions/{action}:
+  /v1/orders/{provider}/{id}/actions/{action}:
     parameters:
+      - $ref: '#/components/parameters/Provider'
       - $ref: '#/components/parameters/Id'
       - name: action
         in: path
         required: true
         schema: { type: string, enum: [accept, ready, dispatch, deliver, cancel] }
     post:
-      operationId: advanceDemoOrder
+      operationId: advanceOrder
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preparationTime: { type: integer, description: Preparation time in minutes for accept action. }
+                reasonId: { type: integer, description: Marketplace rejection reason ID. }
+                itemIdList: { type: array, items: { type: string }, description: Line items to cancel for TGO. }
       responses:
-        '200': { $ref: '#/components/responses/Order' }
+        '200': { description: Order action processed successfully. }
         '401': { description: Missing or invalid token. }
         '404': { description: Order not found. }
         '409': { description: Action unavailable for the current status. }
+        '502': { description: Upstream marketplace failure. }
+        '503': { description: Provider disabled. }
+  /v1/webhooks/{provider}:
+    parameters:
+      - $ref: '#/components/parameters/Provider'
+    post:
+      operationId: ingestProviderWebhook
+      security: []
+      description: Ingest real-time order notifications directly from marketplaces (TGO, Yemeksepeti, Getir, Migros).
+      responses:
+        '200': { description: Order normalized and recorded successfully. }
+        '400': { description: Invalid payload. }
+        '502': { description: Provider payload normalization failure. }
+        '503': { description: Provider disabled. }
 webhooks:
   OrderEvent:
     post:
@@ -125,7 +150,7 @@ components:
       name: provider
       in: path
       required: true
-      schema: { type: string, enum: [demo, tgo] }
+      schema: { type: string, enum: [demo, tgo, yemeksepeti, getir, migros] }
     Id:
       name: id
       in: path
@@ -146,19 +171,19 @@ components:
         id: { type: string }
         channel:
           type: string
-          enum: [demo, tgo]
-          description: Connection adapter used to retrieve the order.
+          enum: [demo, tgo, yemeksepeti, getir, migros]
+          description: Connection adapter used to retrieve or execute the order.
         store_id: { type: string }
         order_number: { type: [string, 'null'] }
         status: { type: string, enum: [new, accepted, ready, out_for_delivery, delivered, cancelled, unknown] }
         source_status: { type: [string, 'null'] }
         source_app:
           type: [string, 'null']
-          description: Original appName supplied by the provider.
+          description: Original appName or source brand supplied by the marketplace.
         source_channel:
           type: string
-          enum: [demo, trendyol, trendyol_go, getir_yemek, uber_eats, unknown]
-          description: Normalized ordering application. Available on newly generated orders.
+          enum: [demo, trendyol, trendyol_go, getir_yemek, uber_eats, yemeksepeti, migros_yemek, unknown]
+          description: Normalized ordering marketplace brand.
         source_label:
           type: [string, 'null']
           description: Display name of the ordering application. Null for an unrecognized source.

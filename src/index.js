@@ -4,7 +4,13 @@ import { createServer } from 'node:http';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createStore } from './store.js';
-import { createTgo, ProviderError } from './tgo.js';
+import { createTgo } from './tgo.js';
+import { createYemeksepeti } from './yemeksepeti.js';
+import { createGetir } from './getir.js';
+import { createMigros } from './migros.js';
+import { ProviderError } from './errors.js';
+
+export { ProviderError };
 
 const publicFiles = new Map([
   ['/', ['../public/index.html', 'text/html; charset=utf-8']],
@@ -14,9 +20,10 @@ const publicFiles = new Map([
 ]);
 
 const routes = {
-  list: /^\/v1\/orders\/(demo|tgo)$/,
-  detail: /^\/v1\/orders\/(demo|tgo)\/([\w-]{1,100})$/,
-  action: /^\/v1\/orders\/demo\/([\w-]{1,100})\/actions\/(accept|ready|dispatch|deliver|cancel)$/,
+  list: /^\/v1\/orders\/(demo|tgo|yemeksepeti|getir|migros)$/,
+  detail: /^\/v1\/orders\/(demo|tgo|yemeksepeti|getir|migros)\/([\w-]{1,100})$/,
+  action: /^\/v1\/orders\/(demo|tgo|yemeksepeti|getir|migros)\/([\w-]{1,100})\/actions\/(accept|ready|dispatch|deliver|cancel)$/,
+  webhook: /^\/v1\/webhooks\/(tgo|yemeksepeti|getir|migros)$/,
 };
 
 function json(response, status, value, headers = {}) {
@@ -37,6 +44,28 @@ function pagination(query) {
   return { page: Number(page), size: Number(size) };
 }
 
+async function parseBody(request) {
+  return new Promise(resolve => {
+    let raw = '';
+    request.on('data', chunk => {
+      raw += chunk;
+      if (raw.length > 1048576) {
+        request.destroy();
+        resolve(null);
+      }
+    });
+    request.on('end', () => {
+      if (!raw) return resolve({});
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        resolve({});
+      }
+    });
+    request.on('error', () => resolve(null));
+  });
+}
+
 export function createApp(env, fetcher = fetch) {
   const token = env.FOOD_API_TOKEN;
   if (!token || token.length < 24) throw new Error('FOOD_API_TOKEN must contain at least 24 characters');
@@ -46,7 +75,14 @@ export function createApp(env, fetcher = fetch) {
       destination.password || !webhookSecret || webhookSecret.length < 24)) {
     throw new Error('Webhook URL must use HTTP(S) and have a separate secret of at least 24 characters');
   }
+
   const tgo = createTgo(env, fetcher);
+  const ys = createYemeksepeti(env, fetcher);
+  const getir = createGetir(env, fetcher);
+  const migros = createMigros(env, fetcher);
+
+  const adapters = { tgo, yemeksepeti: ys, getir, migros };
+
   const path = env.FOOD_DB_PATH ?? './data/orders.sqlite';
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const store = createStore(path, destination, webhookSecret, fetcher);
@@ -58,6 +94,7 @@ export function createApp(env, fetcher = fetch) {
     }
     const { pathname, searchParams } = url;
     const method = request.method;
+
     if ((method === 'GET' || method === 'HEAD') && publicFiles.has(pathname)) {
       const [file, type] = publicFiles.get(pathname);
       const content = readFileSync(new URL(file, import.meta.url));
@@ -71,7 +108,27 @@ export function createApp(env, fetcher = fetch) {
       });
       return response.end(method === 'HEAD' ? undefined : content);
     }
+
     if (method === 'GET' && pathname === '/health') return json(response, 200, { ok: true });
+
+    // Inbound Marketplace Webhooks (Optionally verified via provider signatures)
+    const webhookMatch = pathname.match(routes.webhook);
+    if (method === 'POST' && webhookMatch) {
+      const providerName = webhookMatch[1];
+      const adapter = adapters[providerName];
+      if (!adapter) return json(response, 503, { error: 'provider_disabled' });
+      try {
+        const payload = await parseBody(request);
+        if (!payload) return json(response, 400, { error: 'invalid_payload' });
+        const normalized = adapter.normalize(payload);
+        store.save(normalized, 'order.created');
+        return json(response, 200, { ok: true, id: normalized.id });
+      } catch (err) {
+        if (err instanceof ProviderError) return json(response, err.status, { error: err.message });
+        return json(response, 500, { error: 'webhook_processing_failed' });
+      }
+    }
+
     if (!authorized(request.headers.authorization, token)) {
       return json(response, 401, { error: 'unauthorized' }, { 'www-authenticate': 'Bearer' });
     }
@@ -79,39 +136,73 @@ export function createApp(env, fetcher = fetch) {
     try {
       if (method === 'GET' && pathname === '/v1/providers') {
         return json(response, 200, { data: [
-          { id: 'demo', enabled: true, capabilities: ['list', 'read', 'create', 'accept', 'ready', 'dispatch', 'deliver', 'cancel'] },
-          { id: 'tgo', enabled: !!tgo, environment: 'stage', capabilities: tgo ? ['list', 'read'] : [] },
+          { id: 'demo', enabled: true, environment: 'local', capabilities: ['list', 'read', 'create', 'accept', 'ready', 'dispatch', 'deliver', 'cancel'] },
+          { id: 'tgo', enabled: !!tgo, environment: tgo?.environment ?? 'stage', capabilities: tgo?.capabilities ?? [] },
+          { id: 'yemeksepeti', enabled: !!ys, environment: ys?.environment ?? 'sandbox', capabilities: ys?.capabilities ?? [] },
+          { id: 'getir', enabled: !!getir, environment: getir?.environment ?? 'dev', capabilities: getir?.capabilities ?? [] },
+          { id: 'migros', enabled: !!migros, environment: migros?.environment ?? 'test', capabilities: migros?.capabilities ?? [] },
         ] });
       }
-      if (method === 'POST' && pathname === '/v1/demo/orders') return json(response, 201, store.create());
+
+      if (method === 'POST' && pathname === '/v1/demo/orders') {
+        return json(response, 201, store.create());
+      }
 
       const action = pathname.match(routes.action);
       if (method === 'POST' && action) {
-        const result = store.act(action[1], action[2]);
-        return json(response, result.code, result.data ?? { error: result.error });
+        const provider = action[1];
+        const id = action[2];
+        const actionName = action[3];
+
+        if (provider === 'demo') {
+          const result = store.act(id, actionName);
+          return json(response, result.code, result.data ?? { error: result.error });
+        }
+
+        const adapter = adapters[provider];
+        if (!adapter) return json(response, 503, { error: 'provider_disabled' });
+
+        const body = await parseBody(request);
+        const result = await adapter.act(id, actionName, body);
+        return json(response, 200, result);
       }
 
       const list = pathname.match(routes.list);
       const detail = pathname.match(routes.detail);
       if (method === 'GET' && (list || detail)) {
         const provider = (list || detail)[1];
-        if (provider === 'tgo' && !tgo) return json(response, 503, { error: 'provider_disabled' });
+
+        if (provider === 'demo') {
+          if (list) {
+            const query = pagination(searchParams);
+            if (!query) return json(response, 400, { error: 'invalid_pagination' });
+            return json(response, 200, store.list(query.page, query.size));
+          }
+          const order = store.get(detail[2]);
+          return order ? json(response, 200, order) : json(response, 404, { error: 'order_not_found' });
+        }
+
+        const adapter = adapters[provider];
+        if (!adapter) return json(response, 503, { error: 'provider_disabled' });
+
         if (list) {
           const query = pagination(searchParams);
           if (!query) return json(response, 400, { error: 'invalid_pagination' });
-          const result = provider === 'tgo' ? await tgo.list(query) : store.list(query.page, query.size);
+          const result = await adapter.list(query);
           return json(response, 200, result);
         }
-        const order = provider === 'tgo' ? await tgo.read(detail[2]) : store.get(detail[2]);
+
+        const order = await adapter.read(detail[2]);
         return order ? json(response, 200, order) : json(response, 404, { error: 'order_not_found' });
       }
+
       return json(response, 404, { error: 'not_found' });
     } catch (error) {
       if (error instanceof ProviderError) {
         const headers = error.retryAfter ? { 'retry-after': error.retryAfter } : {};
         return json(response, error.status, { error: error.message }, headers);
       }
-      console.error('Request failed');
+      console.error('Request failed:', error);
       return json(response, 500, { error: 'internal_error' });
     }
   });

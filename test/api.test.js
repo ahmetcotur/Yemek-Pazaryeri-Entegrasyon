@@ -13,9 +13,13 @@ async function boot(t, config = {}, upstream = fetch) {
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
-  return (path, method = 'GET', authenticated = true) => fetch('http://127.0.0.1:' + server.address().port + path, {
+  return (path, method = 'GET', authenticated = true, body = null) => fetch('http://127.0.0.1:' + server.address().port + path, {
     method,
-    headers: authenticated ? { authorization: 'Bearer ' + token } : {},
+    headers: {
+      ...(authenticated ? { authorization: 'Bearer ' + token } : {}),
+      ...(body ? { 'content-type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
 }
 
@@ -96,6 +100,37 @@ test('TGO reads from Meal Stage and only exposes the configured store', async t 
   assert.equal(limited.headers.get('retry-after'), '8');
 });
 
+test('TGO supports real order actions: accept, ready, dispatch, cancel', async t => {
+  const calls = [];
+  const request = await boot(t, {
+    FOOD_TGO_ENABLED: '1', TGO_API_KEY: 'key', TGO_API_SECRET: 'secret', TGO_STORE_ID: '55',
+    TGO_SUPPLIER_ID: '1234', TGO_AGENT_NAME: 'TestAgent', TGO_EXECUTOR_USER: 'test@example.com',
+  }, async (url, options) => {
+    calls.push({ url: url.href, method: options.method, body: options.body ? JSON.parse(options.body) : null });
+    return new Response(null, { status: 200 });
+  });
+
+  const acceptRes = await (await request('/v1/orders/tgo/pkg123/actions/accept', 'POST', true, { preparationTime: 25 })).json();
+  assert.equal(acceptRes.status, 'accepted');
+  assert.equal(calls[0].url, 'https://stageapi.tgoapis.com/integrator/order/meal/suppliers/1234/packages/picked');
+  assert.equal(calls[0].body.packageId, 'pkg123');
+  assert.equal(calls[0].body.preparationTime, 25);
+
+  const readyRes = await (await request('/v1/orders/tgo/pkg123/actions/ready', 'POST')).json();
+  assert.equal(readyRes.status, 'ready');
+  assert.equal(calls[1].url, 'https://stageapi.tgoapis.com/integrator/order/meal/suppliers/1234/packages/pkg123/invoiced');
+
+  const dispatchRes = await (await request('/v1/orders/tgo/pkg123/actions/dispatch', 'POST')).json();
+  assert.equal(dispatchRes.status, 'out_for_delivery');
+  assert.equal(calls[2].url, 'https://stageapi.tgoapis.com/integrator/order/meal/suppliers/1234/packages/pkg123/manual-shipped');
+
+  const cancelRes = await (await request('/v1/orders/tgo/pkg123/actions/cancel', 'POST', true, { itemIdList: ['item1'], reasonId: 621 })).json();
+  assert.equal(cancelRes.status, 'cancelled');
+  assert.equal(calls[3].url, 'https://stageapi.tgoapis.com/integrator/order/meal/suppliers/1234/packages/unsupplied');
+  assert.equal(calls[3].body.packageId, 'pkg123');
+  assert.equal(calls[3].body.reasonId, 621);
+});
+
 test('TGO keeps adapter identity separate from application source', async t => {
   const variants = [
     [{ userInformation: { appName: 'Trendyol' } }, 'Trendyol', 'trendyol', 'Trendyol'],
@@ -127,6 +162,166 @@ test('TGO keeps adapter identity separate from application source', async t => {
   const demo = await (await request('/v1/demo/orders', 'POST')).json();
   assert.equal(demo.source_channel, 'demo');
   assert.equal(demo.source_label, 'Demo');
+});
+
+test('Yemeksepeti supports OAuth2 client credentials, order reading and status actions', async t => {
+  const calls = [];
+  const fakeDhOrder = {
+    id: 'ys-order-99',
+    orderNumber: 'YS123456',
+    vendorId: 'vendor-1',
+    status: 'RECEIVED',
+    pricing: { total: 125.5, currency: 'TRY' },
+    items: [{ name: 'Lahmacun', quantity: 2, price: { unit: 62.75 } }],
+    delivery: { type: 'OWN_DELIVERY' },
+  };
+
+  const request = await boot(t, {
+    FOOD_YS_ENABLED: '1',
+    YS_CLIENT_ID: 'test_client',
+    YS_CLIENT_SECRET: 'test_secret',
+    YS_CHAIN_ID: 'chain_1',
+    YS_VENDOR_ID: 'vendor-1',
+  }, async (url, options) => {
+    calls.push({ url: url.href, method: options.method });
+    if (url.pathname === '/v1/oauth/token') {
+      return Response.json({ access_token: 'fake_dh_token', expires_in: 3600 });
+    }
+    if (url.pathname.includes('/orders/ys-order-99/status')) {
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname.includes('/orders/ys-order-99')) {
+      return Response.json({ data: fakeDhOrder });
+    }
+    if (url.pathname.includes('/orders')) {
+      return Response.json({ data: [fakeDhOrder] });
+    }
+    return new Response(null, { status: 404 });
+  });
+
+  const list = await (await request('/v1/orders/yemeksepeti')).json();
+  assert.equal(list.data.length, 1);
+  assert.equal(list.data[0].source_channel, 'yemeksepeti');
+  assert.equal(list.data[0].status, 'new');
+  assert.equal(list.data[0].total_minor, 12550);
+  assert.equal(list.data[0].fulfillment, 'restaurant');
+
+  const detail = await (await request('/v1/orders/yemeksepeti/ys-order-99')).json();
+  assert.equal(detail.id, 'ys-order-99');
+
+  const actionRes = await (await request('/v1/orders/yemeksepeti/ys-order-99/actions/accept', 'POST')).json();
+  assert.equal(actionRes.status, 'accepted');
+  assert.equal(actionRes.channel, 'yemeksepeti');
+});
+
+test('GetirYemek supports direct API key auth, order reading and lifecycle actions', async t => {
+  const calls = [];
+  const fakeGetirOrder = {
+    id: 'getir-555',
+    clientOrderNumber: 'GTR-001',
+    restaurantId: 'rest-42',
+    status: '100',
+    totalPrice: 240.0,
+    products: [{ name: 'Burger Menü', count: 1, price: 240.0 }],
+    courierType: 'GETIR',
+  };
+
+  const request = await boot(t, {
+    FOOD_GETIR_ENABLED: '1',
+    GETIR_API_KEY: 'test_getir_key',
+    GETIR_RESTAURANT_SECRET_KEY: 'test_getir_secret',
+    GETIR_RESTAURANT_ID: 'rest-42',
+  }, async (url, options) => {
+    calls.push({ url: url.href, method: options.method });
+    if (url.pathname.endsWith('/verify')) return Response.json({ result: true });
+    if (url.pathname.endsWith('/prepare')) return Response.json({ result: true });
+    if (url.pathname.endsWith('/food-orders/getir-555')) return Response.json(fakeGetirOrder);
+    if (url.pathname.endsWith('/food-orders')) return Response.json([fakeGetirOrder]);
+    return new Response(null, { status: 404 });
+  });
+
+  const list = await (await request('/v1/orders/getir')).json();
+  assert.equal(list.data[0].source_channel, 'getir_yemek');
+  assert.equal(list.data[0].status, 'new');
+  assert.equal(list.data[0].total_minor, 24000);
+  assert.equal(list.data[0].fulfillment, 'platform');
+
+  const accept = await (await request('/v1/orders/getir/getir-555/actions/accept', 'POST')).json();
+  assert.equal(accept.status, 'accepted');
+
+  const ready = await (await request('/v1/orders/getir/getir-555/actions/ready', 'POST')).json();
+  assert.equal(ready.status, 'ready');
+});
+
+test('Migros Yemek supports XApiKey, order reading and UpdateOrderStatus', async t => {
+  const calls = [];
+  const fakeMigrosOrder = {
+    orderId: 7891011,
+    orderNumber: 'MGR-100',
+    storeId: 'migros-store-1',
+    status: 'NEW',
+    totalAmount: 199.90,
+    items: [{ name: 'Tavuk Döner Dürüm', quantity: 1, price: 199.90 }],
+    deliveryModel: 'RESTAURANT',
+  };
+
+  const request = await boot(t, {
+    FOOD_MIGROS_ENABLED: '1',
+    MIGROS_API_KEY: 'test_migros_key',
+    MIGROS_STORE_ID: 'migros-store-1',
+  }, async (url, options) => {
+    calls.push({ url: url.href, method: options.method, body: options.body ? JSON.parse(options.body) : null });
+    if (url.pathname === '/Order/v2/UpdateOrderStatus') {
+      return Response.json({ isSuccess: true });
+    }
+    if (url.pathname.includes('/Order/GetOrderDetail')) {
+      return Response.json(fakeMigrosOrder);
+    }
+    if (url.pathname.includes('/Order/GetOrders')) {
+      return Response.json([fakeMigrosOrder]);
+    }
+    return new Response(null, { status: 404 });
+  });
+
+  const list = await (await request('/v1/orders/migros')).json();
+  assert.equal(list.data[0].source_channel, 'migros_yemek');
+  assert.equal(list.data[0].status, 'new');
+  assert.equal(list.data[0].total_minor, 19990);
+  assert.equal(list.data[0].fulfillment, 'restaurant');
+
+  const accept = await (await request('/v1/orders/migros/7891011/actions/accept', 'POST')).json();
+  assert.equal(accept.status, 'accepted');
+  assert.equal(calls[calls.length - 1].body.status, 'APPROVED');
+  assert.equal(calls[calls.length - 1].body.orderId, 7891011);
+});
+
+test('Inbound webhooks normalize and persist orders from real marketplaces', async t => {
+  const request = await boot(t, {
+    FOOD_GETIR_ENABLED: '1',
+    GETIR_API_KEY: 'test_getir_key',
+    GETIR_RESTAURANT_SECRET_KEY: 'test_getir_secret',
+    GETIR_RESTAURANT_ID: 'rest-42',
+  });
+
+  const getirPayload = {
+    id: 'webhook-order-1',
+    restaurantId: 'rest-42',
+    status: '100',
+    totalPrice: 180,
+    products: [{ name: 'Karışık Pizza', count: 1, price: 180 }],
+  };
+
+  const res = await request('/v1/webhooks/getir', 'POST', false, getirPayload);
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.ok, true);
+  assert.equal(data.id, 'webhook-order-1');
+
+  // Verify it exists in local store
+  const orderInDb = await (await request('/v1/orders/demo/webhook-order-1')).json();
+  assert.equal(orderInDb.id, 'webhook-order-1');
+  assert.equal(orderInDb.source_label, 'GetirYemek');
+  assert.equal(orderInDb.total_minor, 18000);
 });
 
 test('SaaS interface is public while order API still requires authentication', async t => {

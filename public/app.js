@@ -5,10 +5,10 @@ const formatMoney = value => new Intl.NumberFormat('tr-TR', { style: 'currency',
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
 const platforms = {
-  tgo: { name: 'Uber Eats Trendyol Go', logo: 'UE', style: 'tgo', status: 'Stage · okuma' },
-  getir: { name: 'GetirYemek by Uber Eats', logo: 'g', style: 'getir', status: 'TGO üzerinden' },
-  ys: { name: 'Yemeksepeti', logo: 'ys', style: 'ys', status: 'Planlanıyor' },
-  migros: { name: 'Migros Yemek', logo: 'm', style: 'migros', status: 'Planlanıyor' },
+  tgo: { name: 'Uber Eats Trendyol Go', logo: 'UE', style: 'tgo', status: 'Stage / Prod · Tam Yönetim' },
+  getir: { name: 'GetirYemek Partner', logo: 'g', style: 'getir', status: 'Doğrudan API / TGO' },
+  ys: { name: 'Yemeksepeti Partner', logo: 'ys', style: 'ys', status: 'Delivery Hero API' },
+  migros: { name: 'Migros Yemek Restoran', logo: 'm', style: 'migros', status: 'Migros One API' },
 };
 const statusText = { new: 'Yeni sipariş', accepted: 'Hazırlanıyor', ready: 'Hazır', out_for_delivery: 'Yolda', delivered: 'Teslim edildi', cancelled: 'İptal edildi', unknown: 'Bilinmiyor' };
 const statusStyle = { new: 'orange', accepted: 'purple', ready: 'blue', out_for_delivery: 'blue', delivered: 'green', cancelled: 'red' };
@@ -169,7 +169,7 @@ function integrations() {
 }
 function keys() {
   return heading('API anahtarları', 'Paneli çalışan servisine bağla veya anahtar deneyimini demo olarak incele.') + banner() +
-    '<div class="detail-grid" style="margin-top:22px"><section class="card padded"><h3>Sunucu bağlantısı</h3><p>Aynı adreste çalışan API’nin FOOD_API_TOKEN değerini kullan. Anahtar yalnızca bu sekmenin belleğinde tutulur.</p><form id="connect-form"><label for="api-token">API erişim anahtarı</label><input id="api-token" type="password" autocomplete="off" placeholder="Sunucundaki FOOD_API_TOKEN" required minlength="24"><label for="api-channel">Sipariş kanalı</label><select id="api-channel"><option value="demo">Demo siparişleri</option><option value="tgo">TGO Stage siparişleri</option></select><div class="modal-actions">' + (state.connected ? '<button type="button" class="btn" data-action="disconnect">Bağlantıyı kes</button>' : '') + '<button class="btn primary" type="submit">Bağlantıyı doğrula ↗</button></div></form><p id="connection-result" class="hint" role="status"></p></section>' +
+    '<div class="detail-grid" style="margin-top:22px"><section class="card padded"><h3>Sunucu bağlantısı</h3><p>Aynı adreste çalışan API’nin FOOD_API_TOKEN değerini kullan. Anahtar yalnızca bu sekmenin belleğinde tutulur.</p><form id="connect-form"><label for="api-token">API erişim anahtarı</label><input id="api-token" type="password" autocomplete="off" placeholder="Sunucundaki FOOD_API_TOKEN" required minlength="24"><label for="api-channel">Sipariş kanalı</label><select id="api-channel"><option value="demo">Demo siparişleri</option><option value="tgo">Uber Eats Trendyol Go</option><option value="yemeksepeti">Yemeksepeti (Delivery Hero)</option><option value="getir">GetirYemek Partner</option><option value="migros">Migros Yemek Restoran</option></select><div class="modal-actions">' + (state.connected ? '<button type="button" class="btn" data-action="disconnect">Bağlantıyı kes</button>' : '') + '<button class="btn primary" type="submit">Bağlantıyı doğrula ↗</button></div></form><p id="connection-result" class="hint" role="status"></p></section>' +
     '<section class="card padded"><div class="row between"><h3>Örnek geliştirici anahtarı</h3><span class="pill">Demo</span></div><p>SaaS müşterisinin kendi erişim anahtarını oluşturacağı ekranın önizlemesi.</p><div class="key-row"><div><code>' + escapeHtml(state.demoKey || 'pk_demo_••••••••••••••••') + '</code><div class="cell-sub">Çalışan API’de geçerli değildir</div></div></div><div class="modal-actions"><button class="btn" data-action="copy-key">Kopyala</button><button class="btn primary" data-action="generate-key">Demo anahtar oluştur</button></div><p class="hint">Müşteri bazlı anahtar üretimi ve iptali, çok kiracılı SaaS backend aşamasında eklenecek.</p></section></div>';
 }
 function webhooks() {
@@ -195,7 +195,7 @@ function plans() {
 }
 function docs() {
   return heading('İlk siparişine birkaç istek uzaktasın.', 'REST API · Bearer kimlik doğrulama · JSON yanıtları') + banner() +
-    '<div class="doc-layout" style="margin-top:22px"><section class="card padded"><h3>API konsolu</h3><p>Demo modunda örnek yanıtı, bağlı modda sunucunun gerçek yanıtını incele.</p><form id="console-form"><label for="endpoint">Uç nokta</label><select id="endpoint"><option value="/v1/providers">GET /v1/providers</option><option value="/v1/orders/demo">GET /v1/orders/demo</option><option value="/v1/orders/tgo">GET /v1/orders/tgo</option><option value="/health">GET /health</option></select><div class="modal-actions"><button class="btn primary">İsteği çalıştır ↗</button></div></form><div id="console-response">' + code({ channel: 'tgo', source_app: 'Galaxy', source_channel: 'getir_yemek', source_label: 'GetirYemek by Uber Eats', status: 'ready', total_minor: 48500, currency: 'TRY' }) + '</div></section>' +
+    '<div class="doc-layout" style="margin-top:22px"><section class="card padded"><h3>API konsolu</h3><p>Demo modunda örnek yanıtı, bağlı modda sunucunun gerçek yanıtını incele.</p><form id="console-form"><label for="endpoint">Uç nokta</label><select id="endpoint"><option value="/v1/providers">GET /v1/providers</option><option value="/v1/orders/demo">GET /v1/orders/demo</option><option value="/v1/orders/tgo">GET /v1/orders/tgo</option><option value="/v1/orders/yemeksepeti">GET /v1/orders/yemeksepeti</option><option value="/v1/orders/getir">GET /v1/orders/getir</option><option value="/v1/orders/migros">GET /v1/orders/migros</option><option value="/health">GET /health</option></select><div class="modal-actions"><button class="btn primary">İsteği çalıştır ↗</button></div></form><div id="console-response">' + code({ channel: 'tgo', source_app: 'Galaxy', source_channel: 'getir_yemek', source_label: 'GetirYemek by Uber Eats', status: 'ready', total_minor: 48500, currency: 'TRY' }) + '</div></section>' +
     '<section class="card padded"><h3>Hızlı başlangıç</h3>' + code('git clone https://github.com/ahmetcotur/Yemek-Pazaryeri-Entegrasyon.git\ncd Yemek-Pazaryeri-Entegrasyon\ncp .env.example .env\n# FOOD_API_TOKEN değerini ayarla\nnode --env-file=.env src/index.js') + '<div class="endpoint"><b>GET</b><code>/v1/orders/{provider}</code></div><div class="endpoint"><b>GET</b><code>/v1/orders/{provider}/{id}</code></div><div class="endpoint"><b>POST</b><code>/v1/demo/orders</code></div><p class="hint">TGO şu anda Stage üzerinde sipariş okur. Sipariş durum işlemleri demo kanalında kullanılabilir.</p><div class="modal-actions"><a class="btn" href="https://github.com/ahmetcotur/Yemek-Pazaryeri-Entegrasyon/blob/main/openapi.yaml" target="_blank" rel="noopener">OpenAPI sözleşmesi ↗</a></div></section></div>';
 }
 
@@ -234,7 +234,7 @@ function showOrder(id) {
   const order = state.orders.find(o => o.id === id);
   if (!order) return;
   const step = steps[order.status];
-  const canAct = order.channel === 'demo';
+  const canAct = !['delivered', 'cancelled'].includes(order.status);
   showModal('Sipariş #' + (order.order_number ?? order.id.slice(0, 8)),
     '<div class="row between" style="margin-bottom:18px"><span class="muted" style="font-size:12px">' + escapeHtml(orderPlatform(order)) + '</span>' + badge(order.status) + '</div>' +
     (order.items ?? []).map(item => '<div class="modal-summary"><span>' + escapeHtml(item.quantity ?? '—') + ' × ' + escapeHtml(item.name ?? 'Ürün adı paylaşılmadı') + '</span><strong>' + escapeHtml(item.unit_price_minor == null ? '—' : formatMoney(item.unit_price_minor)) + '</strong></div>').join('') +
@@ -248,12 +248,13 @@ async function advanceOrder(button) {
   button.disabled = true;
   const transitions = { accept: 'accepted', ready: 'ready', dispatch: 'out_for_delivery', deliver: 'delivered', cancel: 'cancelled' };
   try {
+    const order = state.orders.find(o => o.id === id);
     if (state.connected) {
-      await api('/v1/orders/demo/' + encodeURIComponent(id) + '/actions/' + action, 'POST');
+      const channel = order?.channel || state.activeChannel || 'demo';
+      await api('/v1/orders/' + encodeURIComponent(channel) + '/' + encodeURIComponent(id) + '/actions/' + action, 'POST');
       await refreshOrders();
     } else {
-      const order = state.orders.find(o => o.id === id);
-      order.status = transitions[action];
+      if (order) order.status = transitions[action];
     }
     render();
     showOrder(id);
@@ -262,16 +263,20 @@ async function advanceOrder(button) {
 }
 function showIntegration(key) {
   const p = platforms[key];
-  if (key === 'ys' || key === 'migros') {
-    showModal(p.name, '<p class="section-copy">Bu adaptör yol haritasında. Güncel restoran POS sözleşmesi, test hesabı ve şube yetkileri doğrulandıktan sonra eklenecek.</p><div class="modal-actions"><a href="#docs" class="btn primary" data-action="close">Teknik kapsamı incele ↗</a></div>');
+  if (key === 'ys') {
+    showModal(p.name, '<p class="section-copy">Yemeksepeti (Delivery Hero Partner API) adaptörü aktif. OAuth 2.0 (client credentials) ile <code>YS_CLIENT_ID</code>, <code>YS_CLIENT_SECRET</code>, <code>YS_CHAIN_ID</code> ve <code>YS_VENDOR_ID</code> değişkenleriyle bağlanır.</p>' + code({ channel: 'yemeksepeti', source_channel: 'yemeksepeti', auth: 'OAuth2 Bearer' }) + '<div class="modal-actions"><a href="#docs" class="btn primary" data-action="close">API Dokümanını İncele ↗</a></div>');
+    return;
+  }
+  if (key === 'migros') {
+    showModal(p.name, '<p class="section-copy">Migros Yemek (Migros One Restoran API) adaptörü aktif. <code>MIGROS_API_KEY</code> ve <code>MIGROS_STORE_ID</code> ile UpdateOrderStatus ve GetOrders servislerini yönetir.</p>' + code({ channel: 'migros', source_channel: 'migros_yemek', header: 'XApiKey' }) + '<div class="modal-actions"><a href="#docs" class="btn primary" data-action="close">API Dokümanını İncele ↗</a></div>');
     return;
   }
   if (key === 'getir') {
-    showModal(p.name, '<p class="section-copy">Geçişi tamamlanan ve erişimi uygun restoranların Galaxy kaynaklı siparişleri TGO adaptörüyle okunabilir. TGO bağlantısını yapılandırıp kaynak eşlemesini test et.</p>' + code({ channel: 'tgo', source_app: 'Galaxy', source_channel: 'getir_yemek' }) + '<div class="modal-actions"><button class="btn primary" data-integration="tgo">TGO yapılandırması ↗</button></div>');
+    showModal(p.name, '<p class="section-copy">GetirYemek adaptörü doğrudan GetirFood API (<code>x-api-key</code> + <code>token</code>) ve TGO Galaxy kanalı üzerinden iki yönlü sipariş yönetimini destekler.</p>' + code({ channel: 'getir', source_channel: 'getir_yemek', actions: ['verify', 'prepare', 'handover', 'deliver', 'cancel'] }) + '<div class="modal-actions"><a href="#docs" class="btn primary" data-action="close">API Dokümanını İncele ↗</a></div>');
     return;
   }
-  showModal('TGO Stage bağlantısı',
-    '<p class="section-copy">Gerçek pazaryeri anahtarları sunucudaki ortam değişkenleriyle ayarlanır. Burada demo şube eşleme deneyimini inceleyebilirsin.</p>' +
+  showModal('Uber Eats Trendyol Go (TGO) Bağlantısı',
+    '<p class="section-copy">Trendyol Go Meal API (Stage & Prod) tam sipariş yaşam döngüsüyle (kabul/picked, hazır/invoiced, kurye/manual-shipped, iptal/unsupplied) entegre edilmiştir.</p>' +
     '<form id="integration-form"><label for="store-name">Demo şube adı</label><input id="store-name" placeholder="Örnek restoran · Merkez" required maxlength="80"><label for="store-id">Demo şube kimliği</label><input id="store-id" placeholder="12345" inputmode="numeric" pattern="[0-9]+" required><div class="modal-actions"><button type="button" class="btn" data-action="close">Vazgeç</button><button type="submit" class="btn primary">Demo eşlemesini kaydet</button></div></form>');
 }
 function render() {

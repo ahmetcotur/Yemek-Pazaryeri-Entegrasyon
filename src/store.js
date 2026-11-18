@@ -87,6 +87,10 @@ export function createStore(path, destination, secret, fetcher = fetch) {
       transaction(() => record(order, 'order.created'));
       return order;
     },
+    save(order, type = 'order.updated') {
+      transaction(() => record(order, type));
+      return order;
+    },
     act(id, action) {
       return transaction(() => {
         const order = get(id);
