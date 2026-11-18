@@ -128,3 +128,19 @@ test('TGO keeps adapter identity separate from application source', async t => {
   assert.equal(demo.source_channel, 'demo');
   assert.equal(demo.source_label, 'Demo');
 });
+
+test('SaaS interface is public while order API still requires authentication', async t => {
+  const request = await boot(t);
+  const home = await request('/', 'GET', false);
+  assert.equal(home.status, 200);
+  assert.match(home.headers.get('content-type'), /text\/html/);
+  assert.match(await home.text(), /Paket API/);
+  assert.equal((await request('/assets/app.js', 'GET', false)).status, 200);
+  assert.equal((await request('/assets/style.css', 'GET', false)).status, 200);
+  const head = await request('/app', 'HEAD', false);
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+  assert.equal((await request('/v1/orders/demo', 'GET', false)).status, 401);
+  assert.equal((await request('/.env', 'GET', false)).status, 401);
+  assert.equal((await request('/assets/unknown.js', 'GET', false)).status, 401);
+});

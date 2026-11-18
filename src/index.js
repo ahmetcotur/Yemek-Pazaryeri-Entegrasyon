@@ -1,10 +1,17 @@
 import { timingSafeEqual } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createStore } from './store.js';
 import { createTgo, ProviderError } from './tgo.js';
+
+const publicFiles = new Map([
+  ['/', ['../public/index.html', 'text/html; charset=utf-8']],
+  ['/app', ['../public/index.html', 'text/html; charset=utf-8']],
+  ['/assets/style.css', ['../public/style.css', 'text/css; charset=utf-8']],
+  ['/assets/app.js', ['../public/app.js', 'text/javascript; charset=utf-8']],
+]);
 
 const routes = {
   list: /^\/v1\/orders\/(demo|tgo)$/,
@@ -51,6 +58,19 @@ export function createApp(env, fetcher = fetch) {
     }
     const { pathname, searchParams } = url;
     const method = request.method;
+    if ((method === 'GET' || method === 'HEAD') && publicFiles.has(pathname)) {
+      const [file, type] = publicFiles.get(pathname);
+      const content = readFileSync(new URL(file, import.meta.url));
+      response.writeHead(200, {
+        'content-type': type,
+        'content-length': content.length,
+        'x-content-type-options': 'nosniff',
+        'referrer-policy': 'same-origin',
+        'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        'cache-control': 'no-cache',
+      });
+      return response.end(method === 'HEAD' ? undefined : content);
+    }
     if (method === 'GET' && pathname === '/health') return json(response, 200, { ok: true });
     if (!authorized(request.headers.authorization, token)) {
       return json(response, 401, { error: 'unauthorized' }, { 'www-authenticate': 'Bearer' });

@@ -46,6 +46,22 @@ on 19 November 2026.
 - [TGO package source values](https://developers.tgoapps.com/docs/trendyol-go-yemek-entegrasyonu/siparis-entegrasyonu/ymk-siparis-paketlerini.cekme)
 - [Uber Eats migration fields](https://developers.tgoapps.com/en/docs/uber-eats-migration/meal-uber-eats-migration-changes)
 
+## SaaS demo interface
+
+Open `http://127.0.0.1:3000` after starting the service. The interface includes
+a Turkish landing page, order dashboard, marketplace configuration previews,
+API connection screen, webhook preview, usage example, pricing and API console.
+
+The public interface opens with synthetic, browser-local demo data. Sample
+prices, usage figures and connection forms are marked as previews. To use the
+existing API, open **API anahtarları**, enter the server's `FOOD_API_TOKEN` and
+choose demo orders or TGO Stage. The token stays in tab memory. Refreshing the
+page returns to preview mode.
+
+The connected demo workflow creates and advances orders on the existing API.
+TGO remains read-only on Stage. Tenant signup, billing, marketplace credential
+storage, tenant API key issuance and measured usage are future backend work.
+
 ## Run locally
 
 Use Node.js 24 or later. The service has no npm dependencies.
