@@ -67,7 +67,7 @@ test('TGO reads from Meal Stage and only exposes the configured store', async t 
   const remoteCalls = [];
   const packageData = {
     id: 'package1', storeId: 55, totalPrice: 60.25, packageStatus: 'Invoiced', deliveryType: 'GO',
-    userInformation: { appName: 'Galaxy' }, address: { phone: 'hidden' },
+    userInformation: { appName: 'Galaxy' }, address: { phone: 'hidden', addressText: 'Bağdat Cad. No: 10 Kadıköy' },
     lines: [{ name: 'Demo', unitSellingPrice: 60.25, items: [{ lineItemId: 12, isCancelled: false }] }],
   };
   const request = await boot(t, {
@@ -93,7 +93,9 @@ test('TGO reads from Meal Stage and only exposes the configured store', async t 
   assert.equal(detail.status, 'ready');
   assert.equal(detail.total_minor, 6025);
   assert.equal(detail.source_app, 'Galaxy');
-  assert.equal(detail.address, undefined);
+  assert.equal(detail.address.full_address, 'Bağdat Cad. No: 10 Kadıköy');
+  assert.equal(detail.customer.phone, 'hidden');
+  assert.equal(detail.courier.model, 'platform');
   assert.equal((await request('/v1/orders/tgo/other')).status, 404);
   const limited = await request('/v1/orders/tgo/limited');
   assert.equal(limited.status, 429);

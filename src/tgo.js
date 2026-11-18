@@ -40,7 +40,67 @@ function normalize(order) {
     console.warn(`[TGO_DRIFT] Bilinmeyen paket durumu (packageStatus): "${order.packageStatus}" (sipariş ID: ${order.id})`);
   }
 
-  const delivery = { STORE: 'restaurant', GO: 'platform' };
+  const isPickup = order.storePickupSelected === true;
+  const deliveryModel = isPickup ? 'pickup' : (order.deliveryType === 'STORE' ? 'restaurant' : 'platform');
+
+  const addr = order.address ?? {};
+  const address = (addr.addressText || addr.address1 || addr.fullAddress || addr.city) ? {
+    full_address: addr.addressText ?? addr.address1 ?? addr.fullAddress ?? null,
+    description: addr.addressDescription ?? null,
+    building_number: addr.apartmentNumber ?? addr.buildingNumber ?? null,
+    floor: addr.floor ? String(addr.floor) : null,
+    door_number: addr.doorNumber ? String(addr.doorNumber) : null,
+    district: addr.district ?? null,
+    city: addr.city ?? null,
+    latitude: typeof addr.latitude === 'number' ? addr.latitude : null,
+    longitude: typeof addr.longitude === 'number' ? addr.longitude : null,
+  } : null;
+
+  const customer = {
+    name: order.customer?.name ?? order.customerName ?? order.userInformation?.name ?? null,
+    phone: order.customer?.phone ?? addr.phone ?? addr.maskPhoneNumber ?? null,
+    note: order.customerNote ?? order.packageNote ?? order.note ?? null,
+  };
+
+  const etaMin = order.estimatedPickupTimeMin ? Number(order.estimatedPickupTimeMin) : null;
+  const etaMinutes = etaMin ? Math.max(0, Math.round((etaMin - Date.now()) / 60000)) : null;
+
+  const courier = {
+    model: deliveryModel === 'pickup' ? 'pickup' : deliveryModel,
+    name: order.courier?.name ?? order.courierName ?? null,
+    phone: order.courier?.phoneNumber ?? order.courierPhone ?? null,
+    status: order.pickupEtaState ?? order.courierStatus ?? null,
+    is_nearby: order.isCourierNearby === true,
+    eta_minutes: etaMinutes,
+    estimated_pickup_time: etaMin ? new Date(etaMin).toISOString() : null,
+    tracking_url: order.courierTrackingUrl ?? null,
+  };
+
+  const items = (Array.isArray(order.lines) ? order.lines : []).map(line => {
+    const units = Array.isArray(line.items) ? line.items : [];
+    const modifierOptions = (Array.isArray(line.modifierProducts) ? line.modifierProducts : []).map(m => ({
+      name: m.name ?? m.productName ?? 'Ek Seçenek',
+      price_minor: minorUnits(m.price ?? m.unitSellingPrice ?? 0),
+    }));
+    const extraOptions = (Array.isArray(line.extraIngredients) ? line.extraIngredients : []).map(e => ({
+      name: e.name ?? e.ingredientName ?? 'Ek Malzeme',
+      price_minor: minorUnits(e.price ?? 0),
+    }));
+    const removedIngredients = (Array.isArray(line.removedIngredients) ? line.removedIngredients : []).map(r =>
+      typeof r === 'string' ? r : (r.name ?? r.ingredientName ?? '')
+    ).filter(Boolean);
+
+    return {
+      name: line.name ?? line.productName ?? null,
+      quantity: units.length || line.quantity || 1,
+      cancelled_quantity: units.length ? units.filter(unit => unit.isCancelled === true).length : 0,
+      unit_price_minor: minorUnits(line.unitSellingPrice ?? line.price),
+      note: line.itemNote ?? line.note ?? null,
+      options: [...modifierOptions, ...extraOptions],
+      removed_ingredients: removedIngredients,
+    };
+  });
+
   return {
     id: order.id,
     channel: 'tgo',
@@ -51,19 +111,14 @@ function normalize(order) {
     source_app: sourceApp,
     source_channel: source?.channel ?? 'unknown',
     source_label: source?.label ?? null,
-    fulfillment: order.storePickupSelected === true ? 'pickup' : delivery[order.deliveryType] ?? 'unknown',
+    fulfillment: deliveryModel,
     total_minor: minorUnits(order.totalPrice),
     currency: 'TRY',
     payment_method: order.payment?.paymentType ?? null,
-    items: (Array.isArray(order.lines) ? order.lines : []).map(line => {
-      const units = Array.isArray(line.items) ? line.items : [];
-      return {
-        name: line.name ?? line.productName ?? null,
-        quantity: units.length || null,
-        cancelled_quantity: units.length ? units.filter(unit => unit.isCancelled === true).length : null,
-        unit_price_minor: minorUnits(line.unitSellingPrice),
-      };
-    }),
+    customer,
+    address,
+    courier,
+    items,
   };
 }
 
@@ -152,7 +207,6 @@ export function createTgo(env, fetcher = fetch) {
       
       const supplierId = TGO_SUPPLIER_ID;
       if (action === 'accept') {
-        // PUT /integrator/order/meal/suppliers/{supplierid}/packages/picked
         await request(`/integrator/order/meal/suppliers/${supplierId}/packages/picked`, {
           method: 'PUT',
           body: JSON.stringify({ packageId: String(id), preparationTime: params.preparationTime ?? 30 }),
@@ -161,7 +215,6 @@ export function createTgo(env, fetcher = fetch) {
       }
 
       if (action === 'ready') {
-        // PUT /integrator/order/meal/suppliers/{supplierid}/packages/{packageId}/invoiced
         await request(`/integrator/order/meal/suppliers/${supplierId}/packages/${id}/invoiced`, {
           method: 'PUT',
         });
@@ -169,7 +222,6 @@ export function createTgo(env, fetcher = fetch) {
       }
 
       if (action === 'dispatch') {
-        // PUT /integrator/order/meal/suppliers/{supplierid}/packages/{packageId}/manual-shipped
         await request(`/integrator/order/meal/suppliers/${supplierId}/packages/${id}/manual-shipped`, {
           method: 'PUT',
         });
@@ -177,7 +229,6 @@ export function createTgo(env, fetcher = fetch) {
       }
 
       if (action === 'cancel') {
-        // PUT /integrator/order/meal/suppliers/{supplierid}/packages/unsupplied
         await request(`/integrator/order/meal/suppliers/${supplierId}/packages/unsupplied`, {
           method: 'PUT',
           body: JSON.stringify({

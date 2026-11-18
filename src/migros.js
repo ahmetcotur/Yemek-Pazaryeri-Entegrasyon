@@ -44,12 +44,56 @@ function normalize(order) {
     console.warn(`[MIGROS_DRIFT] Bilinmeyen sipariş durumu (status): "${rawStatus}" (sipariş ID: ${id})`);
   }
 
-  const items = (Array.isArray(order.items || order.lines) ? (order.items || order.lines) : []).map(item => ({
-    name: item.name || item.productName || 'Ürün',
-    quantity: item.quantity || item.count || 1,
-    cancelled_quantity: item.cancelledQuantity || 0,
-    unit_price_minor: minorUnits(item.price || item.unitPrice || 0),
-  }));
+  const deliveryType = order.deliveryModel === 'RESTAURANT' ? 'restaurant' : 'platform';
+
+  const rawAddr = order.customer?.address || order.address || {};
+  const address = (rawAddr.addressText || rawAddr.fullAddress || order.addressText || rawAddr.city) ? {
+    full_address: rawAddr.addressText || rawAddr.fullAddress || order.addressText || null,
+    description: rawAddr.addressDirections || rawAddr.description || order.addressDirections || null,
+    building_number: rawAddr.buildingNumber || null,
+    floor: rawAddr.floor ? String(rawAddr.floor) : null,
+    door_number: rawAddr.doorNumber ? String(rawAddr.doorNumber) : null,
+    district: rawAddr.district || null,
+    city: rawAddr.city || null,
+    latitude: rawAddr.latitude ?? null,
+    longitude: rawAddr.longitude ?? null,
+  } : null;
+
+  const rawCustomer = order.customer || {};
+  const customer = {
+    name: rawCustomer.name || order.customerName || null,
+    phone: rawCustomer.phone || order.customerPhone || null,
+    note: order.orderNote || order.customerNote || order.note || null,
+  };
+
+  const rawCourier = order.courier || {};
+  const courier = {
+    model: deliveryType,
+    name: rawCourier.courierName || order.courierName || null,
+    phone: rawCourier.courierPhone || order.courierPhone || null,
+    status: rawCourier.courierStatus || null,
+    is_nearby: rawCourier.isNearby === true,
+    eta_minutes: rawCourier.eta || null,
+    estimated_pickup_time: null,
+    tracking_url: null,
+  };
+
+  const items = (Array.isArray(order.items || order.lines) ? (order.items || order.lines) : []).map(item => {
+    const options = (Array.isArray(item.options || item.modifiers) ? (item.options || item.modifiers) : []).map(opt => ({
+      name: opt.name || opt.optionName || 'Ek Seçenek',
+      price_minor: minorUnits(opt.price || opt.unitPrice || 0),
+    }));
+
+    return {
+      name: item.name || item.productName || 'Ürün',
+      quantity: item.quantity || item.count || 1,
+      cancelled_quantity: item.cancelledQuantity || 0,
+      unit_price_minor: minorUnits(item.price || item.unitPrice || 0),
+      note: item.note || item.itemNote || null,
+      options,
+      removed_ingredients: item.removedIngredients || [],
+    };
+  });
 
   const total = order.totalAmount ?? order.totalPrice ?? order.total ?? 0;
 
@@ -63,10 +107,13 @@ function normalize(order) {
     source_app: 'MigrosYemek',
     source_channel: 'migros_yemek',
     source_label: 'Migros Yemek',
-    fulfillment: order.deliveryModel === 'RESTAURANT' ? 'restaurant' : 'platform',
+    fulfillment: deliveryType,
     total_minor: minorUnits(total),
     currency: order.currency || 'TRY',
     payment_method: order.paymentType || 'online',
+    customer,
+    address,
+    courier,
     items,
   };
 }

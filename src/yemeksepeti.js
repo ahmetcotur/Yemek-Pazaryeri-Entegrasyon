@@ -36,12 +36,57 @@ function normalize(order) {
     console.warn(`[YEMEKSEPETI_DRIFT] Bilinmeyen sipariş durumu (status): "${rawStatus}" (sipariş ID: ${id})`);
   }
 
-  const items = (Array.isArray(order.items || order.products) ? (order.items || order.products) : []).map(item => ({
-    name: item.name || item.productName || 'Ürün',
-    quantity: item.quantity || 1,
-    cancelled_quantity: item.cancelledQuantity || 0,
-    unit_price_minor: minorUnits(item.price?.unit || item.unitPrice || item.price || 0),
-  }));
+  const deliveryType = (order.delivery?.type === 'OWN_DELIVERY' || order.deliveryType === 'RESTAURANT') ? 'restaurant' : 'platform';
+
+  const rawAddr = order.delivery?.address || order.address || {};
+  const address = (rawAddr.street || rawAddr.formattedAddress || rawAddr.city) ? {
+    full_address: rawAddr.street || rawAddr.formattedAddress || rawAddr.addressText || null,
+    description: rawAddr.instructions || rawAddr.description || null,
+    building_number: rawAddr.building || rawAddr.buildingNumber || null,
+    floor: rawAddr.floor ? String(rawAddr.floor) : null,
+    door_number: rawAddr.intercom || rawAddr.flat || rawAddr.doorNumber || null,
+    district: rawAddr.district || null,
+    city: rawAddr.city || null,
+    latitude: rawAddr.latitude ?? rawAddr.coordinates?.lat ?? null,
+    longitude: rawAddr.longitude ?? rawAddr.coordinates?.lng ?? null,
+  } : null;
+
+  const rawCustomer = order.customer || {};
+  const customerName = rawCustomer.name || (rawCustomer.firstName ? `${rawCustomer.firstName} ${rawCustomer.lastName || ''}`.trim() : null);
+  const customer = {
+    name: customerName,
+    phone: rawCustomer.phone || rawCustomer.mobile || rawAddr.phone || null,
+    note: rawCustomer.instructions || order.delivery?.instructions || order.notes || null,
+  };
+
+  const rawRider = order.delivery?.rider || order.rider || {};
+  const courier = {
+    model: deliveryType,
+    name: rawRider.name || null,
+    phone: rawRider.phone || null,
+    status: rawRider.status || null,
+    is_nearby: rawRider.isNearby === true,
+    eta_minutes: rawRider.eta ?? order.delivery?.eta ?? null,
+    estimated_pickup_time: order.delivery?.estimatedPickupTime || null,
+    tracking_url: order.delivery?.trackingUrl || null,
+  };
+
+  const items = (Array.isArray(order.items || order.products) ? (order.items || order.products) : []).map(item => {
+    const options = (Array.isArray(item.modifiers || item.options) ? (item.modifiers || item.options) : []).map(opt => ({
+      name: opt.name || opt.title || 'Ek Seçenek',
+      price_minor: minorUnits(opt.price?.unit ?? opt.unitPrice ?? opt.price ?? 0),
+    }));
+
+    return {
+      name: item.name || item.productName || 'Ürün',
+      quantity: item.quantity || 1,
+      cancelled_quantity: item.cancelledQuantity || 0,
+      unit_price_minor: minorUnits(item.price?.unit || item.unitPrice || item.price || 0),
+      note: item.customerInstruction || item.note || null,
+      options,
+      removed_ingredients: item.removedIngredients || [],
+    };
+  });
 
   const total = order.pricing?.total ?? order.price?.total ?? order.total ?? 0;
 
@@ -55,10 +100,13 @@ function normalize(order) {
     source_app: 'Yemeksepeti',
     source_channel: 'yemeksepeti',
     source_label: 'Yemeksepeti',
-    fulfillment: (order.delivery?.type === 'OWN_DELIVERY' || order.deliveryType === 'RESTAURANT') ? 'restaurant' : 'platform',
+    fulfillment: deliveryType,
     total_minor: minorUnits(total),
     currency: order.pricing?.currency || order.currency || 'TRY',
     payment_method: order.payment?.method || order.paymentMethod || 'online',
+    customer,
+    address,
+    courier,
     items,
   };
 }

@@ -37,12 +37,56 @@ function normalize(order) {
     console.warn(`[GETIR_DRIFT] Bilinmeyen sipariş durumu (status): "${rawStatus}" (sipariş ID: ${id})`);
   }
 
-  const items = (Array.isArray(order.products || order.items) ? (order.products || order.items) : []).map(p => ({
-    name: p.name || p.title || 'Ürün',
-    quantity: p.count || p.quantity || 1,
-    cancelled_quantity: p.cancelledCount || 0,
-    unit_price_minor: minorUnits(p.price || p.unitPrice || 0),
-  }));
+  const deliveryType = order.courierType === 'RESTAURANT' ? 'restaurant' : 'platform';
+
+  const rawAddr = order.client?.deliveryAddress || order.deliveryAddress || {};
+  const address = (rawAddr.address || rawAddr.city) ? {
+    full_address: rawAddr.address || null,
+    description: rawAddr.description || null,
+    building_number: rawAddr.aptNo || null,
+    floor: rawAddr.floor ? String(rawAddr.floor) : null,
+    door_number: rawAddr.doorNo ? String(rawAddr.doorNo) : null,
+    district: rawAddr.district || null,
+    city: rawAddr.city || null,
+    latitude: rawAddr.location?.lat ?? order.client?.location?.lat ?? null,
+    longitude: rawAddr.location?.lon ?? order.client?.location?.lon ?? null,
+  } : null;
+
+  const rawClient = order.client || {};
+  const customer = {
+    name: rawClient.name || null,
+    phone: rawClient.contactPhoneNumber || rawClient.clientPhoneNumber || null,
+    note: order.clientNote || rawAddr.description || order.note || null,
+  };
+
+  const rawCourier = order.courier || {};
+  const courier = {
+    model: deliveryType,
+    name: rawCourier.name || null,
+    phone: rawCourier.gsm || rawCourier.phoneNumber || null,
+    status: rawCourier.status || null,
+    is_nearby: rawCourier.isNearby === true,
+    eta_minutes: rawCourier.eta || null,
+    estimated_pickup_time: null,
+    tracking_url: null,
+  };
+
+  const items = (Array.isArray(order.products || order.items) ? (order.products || order.items) : []).map(p => {
+    const options = (Array.isArray(p.options || p.modifiers) ? (p.options || p.modifiers) : []).map(opt => ({
+      name: opt.name || opt.title || 'Ek Seçenek',
+      price_minor: minorUnits(opt.price || 0),
+    }));
+
+    return {
+      name: p.name || p.title || 'Ürün',
+      quantity: p.count || p.quantity || 1,
+      cancelled_quantity: p.cancelledCount || 0,
+      unit_price_minor: minorUnits(p.price || p.unitPrice || 0),
+      note: p.note || null,
+      options,
+      removed_ingredients: p.removedIngredients || [],
+    };
+  });
 
   const total = order.totalPrice ?? order.total ?? order.checkoutAmount ?? 0;
 
@@ -56,10 +100,13 @@ function normalize(order) {
     source_app: 'GetirYemek',
     source_channel: 'getir_yemek',
     source_label: 'GetirYemek',
-    fulfillment: order.courierType === 'RESTAURANT' ? 'restaurant' : 'platform',
+    fulfillment: deliveryType,
     total_minor: minorUnits(total),
     currency: order.currency || 'TRY',
     payment_method: order.paymentMethodText || order.paymentType || 'online',
+    customer,
+    address,
+    courier,
     items,
   };
 }

@@ -54,8 +54,25 @@ Entegrasyon adaptörü `channel` ile, müşterinin siparişi verdiği gerçek uy
 ### Gelen Pazaryeri Webhook'ları (`POST /v1/webhooks/{provider}`)
 Pazaryerlerinin (Getir, Yemeksepeti, Migros, TGO) gerçek zamanlı sipariş bildirimleri bu uç noktaya düşer, standart formata dönüştürülerek SQLite veritabanına ve POS outbox kuyruğuna yazılır.
 
+### Kurye, Paket Servisi ve Müşteri Detayları
+Ortak sipariş modelinde MenumQR gibi POS ve KDS sistemlerinin ihtiyaç duyduğu tüm detaylar yer alır:
+- **`customer`**: Müşteri adı, telefonu ve sipariş özel notu (`customerNote`).
+- **`address`**: Açık teslimat adresi (`full_address`), tarif (`description`), bina/kat/kapı no ve harita koordinatları (`latitude`, `longitude`).
+- **`courier`**: Kurye modeli (`platform` veya `restaurant`), kurye adı/telefonu, tahmini varış süresi (`eta_minutes`) ve mutfak uyarısı için `is_nearby: true` bayrağı.
+- **`items.options` & `removed_ingredients`**: Ürün seçenekleri (sos, içecek vb.) ve çıkarılan malzemeler ("Soğansız" vb.).
+
 ### Versiyon ve Şema Kayması İzleme (Drift Detection)
 Pazaryerleri yeni bir `appName`, yeni bir statü veya yeni bir ödeme türü eklediğinde sistem bunu sessizce yutmak yerine konsola ve telemetriye anında `[PROVIDER_DRIFT]` uyarısı kaydeder.
+
+---
+
+## API Dokümantasyon Kaynakları ve Güncellik Takibi
+
+Tüm pazaryerlerinin resmi geliştirici portalları, API referans adresleri, duyuru sayfaları ve sürüm takip yöntemleri için [API_SOURCES_AND_CHANGELOG.md](API_SOURCES_AND_CHANGELOG.md) dokümanını inceleyin:
+- **Uber Eats Trendyol Go:** [developers.tgoapps.com](https://developers.tgoapps.com/)
+- **Yemeksepeti / Delivery Hero:** [partner.deliveryhero.io](https://partner.deliveryhero.io/)
+- **GetirYemek:** [developers.getir.com](https://developers.getir.com/)
+- **Migros Yemek:** Migros One Restoran Portalı / [test-yemek-api.migrosone.com](https://test-yemek-api.migrosone.com/)
 
 ---
 

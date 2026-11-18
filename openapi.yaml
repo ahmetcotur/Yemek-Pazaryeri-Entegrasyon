@@ -191,6 +191,35 @@ components:
         total_minor: { type: [integer, 'null'] }
         currency: { type: string }
         payment_method: { type: [string, 'null'] }
+        customer:
+          type: [object, 'null']
+          properties:
+            name: { type: [string, 'null'] }
+            phone: { type: [string, 'null'] }
+            note: { type: [string, 'null'] }
+        address:
+          type: [object, 'null']
+          properties:
+            full_address: { type: [string, 'null'] }
+            description: { type: [string, 'null'] }
+            building_number: { type: [string, 'null'] }
+            floor: { type: [string, 'null'] }
+            door_number: { type: [string, 'null'] }
+            district: { type: [string, 'null'] }
+            city: { type: [string, 'null'] }
+            latitude: { type: [number, 'null'] }
+            longitude: { type: [number, 'null'] }
+        courier:
+          type: [object, 'null']
+          properties:
+            model: { type: string, enum: [restaurant, platform, pickup] }
+            name: { type: [string, 'null'] }
+            phone: { type: [string, 'null'] }
+            status: { type: [string, 'null'] }
+            is_nearby: { type: boolean }
+            eta_minutes: { type: [integer, 'null'] }
+            estimated_pickup_time: { type: [string, 'null'] }
+            tracking_url: { type: [string, 'null'] }
         items:
           type: array
           items:
@@ -201,3 +230,14 @@ components:
               quantity: { type: [integer, 'null'] }
               cancelled_quantity: { type: [integer, 'null'] }
               unit_price_minor: { type: [integer, 'null'] }
+              note: { type: [string, 'null'] }
+              options:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    price_minor: { type: integer }
+              removed_ingredients:
+                type: array
+                items: { type: string }

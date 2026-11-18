@@ -82,7 +82,44 @@ export function createStore(path, destination, secret, fetcher = fetch) {
         id: randomUUID(), channel: 'demo', store_id: 'demo-store', order_number: null,
         status: 'new', source_status: 'new', source_app: 'demo', source_channel: 'demo', source_label: 'Demo', fulfillment: 'restaurant',
         total_minor: 15500, currency: 'TRY', payment_method: 'online',
-        items: [{ name: 'Demo Pide', quantity: 1, cancelled_quantity: 0, unit_price_minor: 15500 }],
+        customer: {
+          name: 'Ahmet Yılmaz',
+          phone: '+905551234567',
+          note: 'Zili çalmayın, bebek uyuyor.',
+        },
+        address: {
+          full_address: 'Karanfil Sokak No: 12 Daire: 4 Kadıköy / İstanbul',
+          description: 'Kapı şifresi 1234, asansörle 2. kat',
+          building_number: '12',
+          floor: '2',
+          door_number: '4',
+          district: 'Kadıköy',
+          city: 'İstanbul',
+          latitude: 40.9912,
+          longitude: 29.0234,
+        },
+        courier: {
+          model: 'restaurant',
+          name: 'Mehmet K. (Restoran Kuryesi)',
+          phone: '+905559876543',
+          status: 'ASSIGNED',
+          is_nearby: false,
+          eta_minutes: 20,
+          estimated_pickup_time: null,
+          tracking_url: null,
+        },
+        items: [{
+          name: 'Demo Kaşarlı Pide Menü',
+          quantity: 1,
+          cancelled_quantity: 0,
+          unit_price_minor: 15500,
+          note: 'Pide çıtır olsun lütfen',
+          options: [
+            { name: 'Kutu Kola', price_minor: 0 },
+            { name: 'Ekstra Kaşar', price_minor: 2500 },
+          ],
+          removed_ingredients: ['Maydanoz'],
+        }],
       };
       transaction(() => record(order, 'order.created'));
       return order;

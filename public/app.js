@@ -235,10 +235,36 @@ function showOrder(id) {
   if (!order) return;
   const step = steps[order.status];
   const canAct = !['delivered', 'cancelled'].includes(order.status);
+  const custHtml = order.customer ? '<div class="card padded" style="margin-bottom:12px;background:var(--bg-subtle, #18181b);border-radius:8px;padding:10px">' +
+    '<div class="row between"><strong>' + escapeHtml(order.customer.name || 'Müşteri') + '</strong><span class="muted">' + escapeHtml(order.customer.phone || '') + '</span></div>' +
+    (order.customer.note ? '<div style="margin-top:4px;color:var(--orange, #f59e0b);font-size:12px"><b>Not:</b> ' + escapeHtml(order.customer.note) + '</div>' : '') +
+    '</div>' : '';
+
+  const addrHtml = order.address ? '<div class="card padded" style="margin-bottom:12px;background:var(--bg-subtle, #18181b);border-radius:8px;padding:10px">' +
+    '<div style="font-size:11px;color:var(--muted, #a1a1aa);text-transform:uppercase">Teslimat Adresi</div>' +
+    '<div style="font-size:13px;margin-top:2px"><b>' + escapeHtml(order.address.full_address || '') + '</b></div>' +
+    (order.address.description ? '<div style="font-size:12px;color:var(--muted, #a1a1aa);margin-top:2px">Tarif: ' + escapeHtml(order.address.description) + '</div>' : '') +
+    '</div>' : '';
+
+  const courierHtml = order.courier ? '<div class="card padded" style="margin-bottom:12px;background:var(--bg-subtle, #18181b);border-radius:8px;padding:10px">' +
+    '<div class="row between"><span><b>Teslimat:</b> ' + (order.courier.model === 'restaurant' ? 'Restoran Kuryesi' : 'Platform Kuryesi') + '</span>' +
+    (order.courier.is_nearby ? '<span class="pill orange">Kurye Kapıda!</span>' : '') + '</div>' +
+    (order.courier.name ? '<div style="font-size:12px;margin-top:2px">Kurye: ' + escapeHtml(order.courier.name) + (order.courier.phone ? ' (' + escapeHtml(order.courier.phone) + ')' : '') + '</div>' : '') +
+    (order.courier.eta_minutes != null ? '<div style="font-size:12px;color:var(--blue, #3b82f6);margin-top:2px">Tahmini Varış: ' + order.courier.eta_minutes + ' dk</div>' : '') +
+    '</div>' : '';
+
+  const itemsHtml = (order.items ?? []).map(item => {
+    const opts = (item.options ?? []).map(o => '<span style="font-size:11px;color:var(--muted,#a1a1aa);display:inline-block;margin-right:6px">+ ' + escapeHtml(o.name) + '</span>').join('');
+    const note = item.note ? '<div style="font-size:11px;color:var(--orange,#f59e0b)">Ürün Notu: ' + escapeHtml(item.note) + '</div>' : '';
+    return '<div class="modal-summary" style="flex-direction:column;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)">' +
+      '<div class="row between" style="width:100%"><span>' + escapeHtml(item.quantity ?? '—') + ' × ' + escapeHtml(item.name ?? 'Ürün adı paylaşılmadı') + '</span><strong>' + escapeHtml(item.unit_price_minor == null ? '—' : formatMoney(item.unit_price_minor)) + '</strong></div>' +
+      (opts ? '<div style="margin-top:2px">' + opts + '</div>' : '') + note + '</div>';
+  }).join('');
+
   showModal('Sipariş #' + (order.order_number ?? order.id.slice(0, 8)),
-    '<div class="row between" style="margin-bottom:18px"><span class="muted" style="font-size:12px">' + escapeHtml(orderPlatform(order)) + '</span>' + badge(order.status) + '</div>' +
-    (order.items ?? []).map(item => '<div class="modal-summary"><span>' + escapeHtml(item.quantity ?? '—') + ' × ' + escapeHtml(item.name ?? 'Ürün adı paylaşılmadı') + '</span><strong>' + escapeHtml(item.unit_price_minor == null ? '—' : formatMoney(item.unit_price_minor)) + '</strong></div>').join('') +
-    '<div class="modal-summary"><span>Toplam</span><strong class="order-total">' + escapeHtml(order.total_minor == null ? '—' : formatMoney(order.total_minor)) + '</strong></div><p class="hint">' + (state.connected ? 'API kanalı: ' + escapeHtml(order.channel) : 'Örnek sipariş · Değişiklikler bu sekmede tutulur.') + '</p><div class="modal-actions">' +
+    '<div class="row between" style="margin-bottom:14px"><span class="muted" style="font-size:12px">' + escapeHtml(orderPlatform(order)) + '</span>' + badge(order.status) + '</div>' +
+    custHtml + addrHtml + courierHtml + itemsHtml +
+    '<div class="modal-summary" style="margin-top:10px"><span>Toplam</span><strong class="order-total">' + escapeHtml(order.total_minor == null ? '—' : formatMoney(order.total_minor)) + '</strong></div><p class="hint">' + (state.connected ? 'API kanalı: ' + escapeHtml(order.channel) : 'Örnek sipariş · Değişiklikler bu sekmede tutulur.') + '</p><div class="modal-actions">' +
     (canAct && !['delivered', 'cancelled', 'out_for_delivery'].includes(order.status) ? '<button class="btn danger" data-step="cancel" data-id="' + escapeHtml(order.id) + '">İptal et</button>' : '') +
     (step && canAct ? '<button class="btn primary" data-step="' + step[0] + '" data-id="' + escapeHtml(order.id) + '">' + step[1] + '</button>' : '<button class="btn" data-action="close">Kapat</button>') + '</div>');
 }
