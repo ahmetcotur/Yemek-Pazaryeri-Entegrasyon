@@ -1,4 +1,10 @@
 const stage = 'https://stageapi.tgoapis.com';
+const sources = new Map([
+  ['Trendyol', { channel: 'trendyol', label: 'Trendyol' }],
+  ['TrendyolGo', { channel: 'trendyol_go', label: 'Uber Eats Trendyol Go' }],
+  ['Galaxy', { channel: 'getir_yemek', label: 'GetirYemek by Uber Eats' }],
+  ['UberEats', { channel: 'uber_eats', label: 'Uber Eats' }],
+]);
 const statuses = new Map(Object.entries({
   Created: 'new', Picking: 'accepted', Invoiced: 'ready',
   Shipped: 'out_for_delivery', Delivered: 'delivered',
@@ -21,6 +27,8 @@ function normalize(order) {
   if (typeof order?.id !== 'string' || !order.id || !order.storeId) {
     throw new ProviderError(502, 'invalid_provider_response');
   }
+  const sourceApp = order.userInformation?.appName ?? order.appName ?? null;
+  const source = sources.get(sourceApp);
   const delivery = { STORE: 'restaurant', GO: 'platform' };
   return {
     id: order.id,
@@ -29,7 +37,9 @@ function normalize(order) {
     order_number: order.orderNumber == null ? null : String(order.orderNumber),
     status: statuses.get(order.packageStatus) ?? 'unknown',
     source_status: order.packageStatus ?? null,
-    source_app: order.userInformation?.appName ?? order.appName ?? null,
+    source_app: sourceApp,
+    source_channel: source?.channel ?? 'unknown',
+    source_label: source?.label ?? null,
     fulfillment: order.storePickupSelected === true ? 'pickup' : delivery[order.deliveryType] ?? 'unknown',
     total_minor: minorUnits(order.totalPrice),
     currency: 'TRY',

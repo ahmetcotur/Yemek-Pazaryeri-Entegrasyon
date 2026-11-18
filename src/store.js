@@ -80,7 +80,7 @@ export function createStore(path, destination, secret, fetcher = fetch) {
     create() {
       const order = {
         id: randomUUID(), channel: 'demo', store_id: 'demo-store', order_number: null,
-        status: 'new', source_status: 'new', source_app: 'demo', fulfillment: 'restaurant',
+        status: 'new', source_status: 'new', source_app: 'demo', source_channel: 'demo', source_label: 'Demo', fulfillment: 'restaurant',
         total_minor: 15500, currency: 'TRY', payment_method: 'online',
         items: [{ name: 'Demo Pide', quantity: 1, cancelled_quantity: 0, unit_price_minor: 15500 }],
       };

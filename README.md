@@ -8,8 +8,43 @@ app such as MenumQR can use the same order contract across different providers.
 | Provider | Current support |
 | --- | --- |
 | Demo | Generate an order, read it, accept it, mark it ready, dispatch, deliver or cancel. Optional outbound webhook delivery. |
-| Uber Eats Trendyol Go – Meal | Experimental, read-only adapter for one store on Stage. List and retrieve packages. |
+| Uber Eats Trendyol Go – Meal | Experimental, read-only adapter for one store on Stage. Reads supported Trendyol, Trendyol Go, GetirYemek by Uber Eats and Uber Eats source values. |
 | Yemeksepeti Restaurants and Migros Yemek | Planned, subject to current provider documentation and test access. |
+
+## Marketplace coverage
+
+The connection adapter is identified by `channel`. The application where the
+customer placed the order is identified by `source_channel` and `source_label`.
+The original provider value is retained in `source_app`.
+
+| Connection | Original appName | source_channel | source_label |
+| --- | --- | --- | --- |
+| tgo | Trendyol | trendyol | Trendyol |
+| tgo | TrendyolGo | trendyol_go | Uber Eats Trendyol Go |
+| tgo | Galaxy | getir_yemek | GetirYemek by Uber Eats |
+| tgo | UberEats | uber_eats | Uber Eats |
+| tgo | Unrecognized or missing | unknown | null |
+| demo | demo | demo | Demo |
+
+A MenumQR or POS client can show **GetirYemek by Uber Eats** on an order while
+using the TGO connection and package ID for API requests. Store external
+references as the adapter and package ID pair. The source identifies the
+ordering application and can be used in reports.
+
+GetirYemek coverage through this adapter depends on the restaurant's migration
+and provider access. Verify Galaxy and UberEats orders against the configured
+Stage store before enabling a restaurant workflow. Legacy Getir credentials and
+endpoints require a separately verified contract.
+
+These source fields are additive. Existing clients can continue using
+`channel` and `source_app`. Stored demo orders created by earlier versions may
+lack the new fields. Clients should handle that case with a generic channel label.
+
+Source mapping checked against the provider's package and migration documentation
+on 19 November 2026.
+
+- [TGO package source values](https://developers.tgoapps.com/docs/trendyol-go-yemek-entegrasyonu/siparis-entegrasyonu/ymk-siparis-paketlerini.cekme)
+- [Uber Eats migration fields](https://developers.tgoapps.com/en/docs/uber-eats-migration/meal-uber-eats-migration-changes)
 
 ## Run locally
 
@@ -97,9 +132,10 @@ the TGO Stage read contract with synthetic data. See [LICENSE](LICENSE) for lice
 
 ## Roadmap
 
-- Verify TGO reads against a real Stage store, then implement supported order actions and incoming webhooks.
+- Verify TGO reads, including Galaxy and UberEats source orders, against a real Stage store, then implement supported order actions and incoming webhooks.
 - Add tenant authentication, encrypted connection credentials and branch mapping for SaaS deployments.
-- Add Yemeksepeti Restaurant and Migros Yemek adapters once current contracts and test access are available.
+- Prioritize Yemeksepeti Restaurant, followed by Migros Yemek, once current contracts and test access are available.
+- Evaluate Fuudy integration when restaurant demand and a supported integration contract are available.
 
 ## Contributing
 

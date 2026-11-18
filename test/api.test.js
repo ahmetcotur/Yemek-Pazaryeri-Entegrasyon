@@ -95,3 +95,36 @@ test('TGO reads from Meal Stage and only exposes the configured store', async t 
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get('retry-after'), '8');
 });
+
+test('TGO keeps adapter identity separate from application source', async t => {
+  const variants = [
+    [{ userInformation: { appName: 'Trendyol' } }, 'Trendyol', 'trendyol', 'Trendyol'],
+    [{ userInformation: { appName: 'TrendyolGo' } }, 'TrendyolGo', 'trendyol_go', 'Uber Eats Trendyol Go'],
+    [{ userInformation: { appName: 'Galaxy' } }, 'Galaxy', 'getir_yemek', 'GetirYemek by Uber Eats'],
+    [{ userInformation: { appName: 'UberEats' } }, 'UberEats', 'uber_eats', 'Uber Eats'],
+    [{ appName: 'Galaxy' }, 'Galaxy', 'getir_yemek', 'GetirYemek by Uber Eats'],
+    [{ userInformation: { appName: 'FutureApp' } }, 'FutureApp', 'unknown', null],
+    [{}, null, 'unknown', null],
+  ];
+  const packages = variants.map(([fields], index) => ({ id: 'source' + index, storeId: 55, ...fields }));
+  const request = await boot(t, {
+    FOOD_TGO_ENABLED: '1', TGO_API_KEY: 'key', TGO_API_SECRET: 'secret', TGO_STORE_ID: '55',
+    TGO_SUPPLIER_ID: '1234', TGO_AGENT_NAME: 'TestAgent', TGO_EXECUTOR_USER: 'test@example.com',
+  }, async url => {
+    if (url.pathname.endsWith('/packages')) return Response.json({ content: packages, totalPages: 1 });
+    return Response.json(packages.find(order => url.pathname.endsWith('/' + order.id)));
+  });
+  const page = await (await request('/v1/orders/tgo')).json();
+  for (const [index, [, original, channel, label]] of variants.entries()) {
+    const detail = await (await request('/v1/orders/tgo/source' + index)).json();
+    for (const order of [detail, page.data[index]]) {
+      assert.equal(order.channel, 'tgo');
+      assert.equal(order.source_app, original);
+      assert.equal(order.source_channel, channel);
+      assert.equal(order.source_label, label);
+    }
+  }
+  const demo = await (await request('/v1/demo/orders', 'POST')).json();
+  assert.equal(demo.source_channel, 'demo');
+  assert.equal(demo.source_label, 'Demo');
+});

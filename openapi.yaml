@@ -144,12 +144,24 @@ components:
       required: [id, channel, store_id, order_number, status, source_status, source_app, fulfillment, total_minor, currency, payment_method, items]
       properties:
         id: { type: string }
-        channel: { type: string, enum: [demo, tgo] }
+        channel:
+          type: string
+          enum: [demo, tgo]
+          description: Connection adapter used to retrieve the order.
         store_id: { type: string }
         order_number: { type: [string, 'null'] }
         status: { type: string, enum: [new, accepted, ready, out_for_delivery, delivered, cancelled, unknown] }
         source_status: { type: [string, 'null'] }
-        source_app: { type: [string, 'null'] }
+        source_app:
+          type: [string, 'null']
+          description: Original appName supplied by the provider.
+        source_channel:
+          type: string
+          enum: [demo, trendyol, trendyol_go, getir_yemek, uber_eats, unknown]
+          description: Normalized ordering application. Available on newly generated orders.
+        source_label:
+          type: [string, 'null']
+          description: Display name of the ordering application. Null for an unrecognized source.
         fulfillment: { type: string, enum: [restaurant, platform, pickup, unknown] }
         total_minor: { type: [integer, 'null'] }
         currency: { type: string }
